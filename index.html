@@ -51,18 +51,9 @@
         // 创建 Babylon.js 引擎
         const engine = new BABYLON.Engine(canvas, true);
 
-        // 确保背景音乐自动播放
-        const backgroundMusic = document.getElementById("backgroundMusic");
-        backgroundMusic.volume = 0.5; // 设置音量为 50%
-
-        // 解除静音以尝试自动播放
-        backgroundMusic.muted = false;
-        backgroundMusic.play().catch(error => {
-            console.error("背景音乐自动播放失败:", error);
-        });
-
         // 创建音频上下文和分析器
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const backgroundMusic = document.getElementById("backgroundMusic");
         const audioSource = audioContext.createMediaElementSource(backgroundMusic);
         const analyser = audioContext.createAnalyser();
         audioSource.connect(analyser);
@@ -85,6 +76,16 @@
             // 添加相机
             const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, 10, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
+
+            // 添加背景音乐播放逻辑
+            backgroundMusic.volume = 0.5; // 设置音量为 50%
+            backgroundMusic.muted = false; // 解除静音
+
+            scene.onBeforeRenderObservable.addOnce(() => {
+                backgroundMusic.play().catch(error => {
+                    console.error("背景音乐播放失败:", error);
+                });
+            });
 
             // 添加动画残影效果
             const postProcess = new BABYLON.DefaultRenderingPipeline(
