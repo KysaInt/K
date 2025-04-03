@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AYE'BABYLON</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            display: block;
+        }
+        #fixedText {
+            position: absolute;
+            bottom: 10px; /* 移动到屏幕底部 */
+            right: 10px; /* 移动到屏幕右侧 */
+            font-size: 24px;
+            font-weight: 100; /* 设置为细等线体 */
+            font-family: "Arial", sans-serif;
+            color: white;
+            z-index: 100;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="fixedText">AYE-2025/04</div>
+    <!-- 用于渲染的 Canvas 元素 -->
+    <canvas id="renderCanvas" touch-action="none" style="width: 100%; height: 100%;"></canvas>
+
+    <!-- 添加背景音乐 -->
+    <audio id="backgroundMusic" preload="auto" loop>
+        <source src="./audio/bg.mp3" type="audio/mpeg">
+        您的浏览器不支持音频播放。
+    </audio>
+
+    <!-- 引入 Babylon.js 和加载器 -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+    <!-- Babylon.js 脚本 -->
+    <script>
+        // 获取 Canvas 元素
+        const canvas = document.getElementById("renderCanvas");
+
+        // 创建 Babylon.js 引擎
+        const engine = new BABYLON.Engine(canvas, true);
+
+        // 确保背景音乐在用户交互后播放
+        const backgroundMusic = document.getElementById("backgroundMusic");
+        backgroundMusic.volume = 0.5; // 设置音量为 50%
+
+        document.body.addEventListener("click", () => {
+            backgroundMusic.play().catch(error => {
+                console.error("背景音乐播放失败:", error);
+            });
+        }, { once: true });
+
+        // 创建音频上下文和分析器
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioSource = audioContext.createMediaElementSource(backgroundMusic);
+        const analyser = audioContext.createAnalyser();
+        audioSource.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 256;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        // 创建场景
+        const createScene = () => {
+            const scene = new BABYLON.Scene(engine);
+
+            // 设置背景颜色为纯黑
+            scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
+
+            // 添加辉光层
+            const glowLayer = new BABYLON.GlowLayer("glow", scene);
+            glowLayer.intensity = 0.7; // 将辉光强度上限降低至 0.7
+
+            // 添加相机
+            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, 10, BABYLON.Vector3.Zero(), scene);
+            camera.attachControl(canvas, true);
+
+            // 添加动画残影效果
+            const postProcess = new BABYLON.DefaultRenderingPipeline(
+                "defaultPipeline",
+                true,
+                scene,
+                [camera]
+            );
+            postProcess.motionBlurEnabled = true; // 启用运动模糊
+            postProcess.motionBlurSamples = 16; // 设置模糊采样数
+            postProcess.motionBlurStrength = 0.5; // 设置模糊强度
+
+            // 添加光源
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(3, .5, 0), scene);
+            // 添加光源
+            const light2 = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(-3, .5, 0), scene);
+            // 添加光源
+            const light3 = new BABYLON.HemisphericLight("light3", new BABYLON.Vector3(0, -1, 0), scene);
+            light3.diffuse = new BABYLON.Color3(1, 0.5, 0.5); // 粉红色
+
+            // 加载 3D 模型
+            BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
+                console.log("模型加载完成！");
+
+                // 等待用户交互后开始动画
+                document.body.addEventListener("click", () => {
+                    scene.onAfterRenderObservable.addOnce(() => {
+                        scene.meshes.forEach((mesh, index) => {
+                            if (mesh.material) {
+                                const randomColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+                                const pbrMaterial = new BABYLON.PBRMaterial("pbr", scene);
+                                pbrMaterial.albedoColor = randomColor;
+                                pbrMaterial.emissiveColor = randomColor; // 初始发光颜色
+                                mesh.material = pbrMaterial;
+
+                                // 将物体添加到辉光层
+                                glowLayer.addIncludedOnlyMesh(mesh);
+                            }
+
+                            // 默认旋转 180 度
+                            mesh.rotation.y += Math.PI;
+
+                            // 添加上下浮动动画
+                            const floatAnimation = new BABYLON.Animation(
+                                "floatAnimation",
+                                "position.y",
+                                30,
+                                BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+                                BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                            );
+                            const floatKeys = [
+                                { frame: 0, value: mesh.position.y },
+                                { frame: 30, value: mesh.position.y + 0.5 },
+                                { frame: 60, value: mesh.position.y }
+                            ];
+                            floatAnimation.setKeys(floatKeys);
+                            mesh.animations.push(floatAnimation);
+
+                            // 添加自旋转动画
+                            const rotateAnimation = new BABYLON.Animation(
+                                "rotateAnimation",
+                                "rotation.y",
+                                30,
+                                BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+                                BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                            );
+                            const rotateKeys = [
+                                { frame: 0, value: mesh.rotation.y },
+                                { frame: 60, value: mesh.rotation.y + Math.PI * 2 }
+                            ];
+                            rotateAnimation.setKeys(rotateKeys);
+                            mesh.animations.push(rotateAnimation);
+
+                            // 添加无序三轴旋转动画
+                            const randomRotationAnimation = new BABYLON.Animation(
+                                "randomRotationAnimation",
+                                "rotation",
+                                6,
+                                BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+                                BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                            );
+                            const randomRotationKeys = [
+                                { frame: 0, value: mesh.rotation.clone() },
+                                { frame: 20, value: new BABYLON.Vector3(mesh.rotation.x + Math.random() * Math.PI, mesh.rotation.y + Math.random() * Math.PI, mesh.rotation.z + Math.random() * Math.PI) },
+                                { frame: 40, value: new BABYLON.Vector3(mesh.rotation.x + Math.random() * Math.PI, mesh.rotation.y + Math.random() * Math.PI, mesh.rotation.z + Math.random() * Math.PI) },
+                                { frame: 60, value: mesh.rotation.clone() }
+                            ];
+                            randomRotationAnimation.setKeys(randomRotationKeys);
+                            mesh.animations.push(randomRotationAnimation);
+
+                            // 确保动画被正确启动
+                            scene.beginAnimation(mesh, 0, 60, true, 0.6);
+                        });
+                    });
+                }, { once: true });
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        // 动态调整物体材质的自发光强度和缩放值
+        engine.runRenderLoop(() => {
+            analyser.getByteFrequencyData(dataArray);
+            const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+
+            // 动态调整物体材质的自发光强度和缩放值
+            scene.meshes.forEach(mesh => {
+                if (mesh.material && mesh.material.emissiveColor) {
+                    // 根据平均音量调整发光强度
+                    const intensity = averageLoudness / 256;
+                    mesh.material.emissiveColor = mesh.material.albedoColor.scale(intensity);
+
+                    // 根据平均音量调整缩放值并整体乘以 0.7
+                    const scaleFactor = (2 + intensity * 2) * -2 * 2 * 0.7; // 缩放范围 [-5.6, -11.2]
+                    mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+                }
+            });
+
+            scene.render();
+        });
+
+        // 监听窗口大小变化
+        window.addEventListener("resize", () => {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>
