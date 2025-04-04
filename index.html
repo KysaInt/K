@@ -26,6 +26,9 @@
         </div>
         <span>2025/04</span>
     </div>
+    <div id="touchToPlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 72px; font-family: 'Arial', sans-serif; z-index: 2;">
+        Touch&Play
+    </div>
     <script>
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true);
@@ -188,8 +191,12 @@
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const progressFill = document.getElementById("progressFill");
+        const touchToPlay = document.getElementById("touchToPlay");
 
         const startInteraction = () => {
+            // 隐藏 "Touch&Play"
+            touchToPlay.style.display = "none";
+
             // 恢复音频上下文
             if (audioContext.state === "suspended") {
                 audioContext.resume();
