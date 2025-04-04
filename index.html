@@ -44,9 +44,12 @@
             const glowLayer = new BABYLON.GlowLayer("glow", scene);
             glowLayer.intensity = .4;
 
-            // 添加相机
-            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI, 2, BABYLON.Vector3.Zero(), scene);
+            // 添加相机并确保目标居中
+            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI, 1.8, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
+
+            // 确保相机的视角适配屏幕比例
+            camera.viewport = new BABYLON.Viewport(0, 0, 1, 1);
 
             // 加载 .glb 模型
             BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
@@ -177,6 +180,19 @@
         };
 
         const scene = createScene();
+
+        // 确保 canvas 填充整个屏幕
+        const resizeCanvas = () => {
+            canvas.style.width = "100vw";
+            canvas.style.height = "100vh";
+            engine.resize();
+        };
+
+        // 监听窗口尺寸变化
+        window.addEventListener("resize", resizeCanvas);
+
+        // 初始化时调整 canvas 尺寸
+        resizeCanvas();
 
         const backgroundMusic = document.getElementById("backgroundMusic");
         backgroundMusic.volume = 0.5;
