@@ -16,9 +16,9 @@
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
-<body>
+<body style="background-color: black;"> <!-- 设置初始背景为黑色 -->
     <canvas id="renderCanvas" style="width: 100vw; height: 100vh;"></canvas>
-    <audio id="backgroundMusic" src="./audio/bg.mp3" autoplay loop></audio> <!-- 修改背景音乐 -->
+    <audio id="backgroundMusic" src="./audio/bg.mp3" loop></audio> <!-- 修改背景音乐 -->
     <div id="loudnessDisplay" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 16px; font-family: Arial, sans-serif; z-index: 1;">
         Loudness: 0
     </div> <!-- 左上角显示平均响度 -->
@@ -134,7 +134,6 @@
 
         const scene = createScene();
 
-        // 自动播放背景音乐
         const backgroundMusic = document.getElementById("backgroundMusic");
         backgroundMusic.volume = 0.5;
 
@@ -149,30 +148,43 @@
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const loudnessDisplay = document.getElementById("loudnessDisplay");
 
-        engine.runRenderLoop(() => {
-            // 获取音频数据
-            analyser.getByteFrequencyData(dataArray);
+        const startInteraction = () => {
+            // 恢复音频上下文
+            if (audioContext.state === "suspended") {
+                audioContext.resume();
+            }
+            backgroundMusic.play();
 
-            // 更新每个网格的发光强度
-            scene.meshes.forEach(mesh => {
-                if (mesh.updateEmissiveIntensity) {
-                    mesh.updateEmissiveIntensity();
-                }
+            // 移除初始黑色背景
+            document.body.style.backgroundColor = "transparent";
+
+            engine.runRenderLoop(() => {
+                // 获取音频数据
+                analyser.getByteFrequencyData(dataArray);
+
+                // 更新每个网格的发光强度
+                scene.meshes.forEach(mesh => {
+                    if (mesh.updateEmissiveIntensity) {
+                        mesh.updateEmissiveIntensity();
+                    }
+                });
+
+                // 更新左上角的响度显示
+                const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
+
+                // 根据响度动态调整模型的整体缩放
+                scene.meshes.forEach(mesh => {
+                    const scaleFactor = 1 + averageLoudness / 256; // 响度归一化并绑定到缩放
+                    mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+                });
+
+                scene.render();
             });
+        };
 
-            // 更新左上角的响度显示
-            const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-            loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
-
-            // 根据响度动态调整模型的整体缩放
-            scene.meshes.forEach(mesh => {
-                const scaleFactor = 1 + averageLoudness / 256; // 响度归一化并绑定到缩放
-                mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
-            });
-
-            scene.render();
-        });
-
+        // 等待用户交互后启动
+        window.addEventListener("click", startInteraction, { once: true });
         window.addEventListener("resize", () => {
             engine.resize();
         });
