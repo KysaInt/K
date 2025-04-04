@@ -4,12 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Babylon.js Webpage</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 禁用滚动 */
+            width: 100%;
+            height: 100%;
+        }
+    </style>
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
-    <canvas id="renderCanvas" style="width: 100vw; height: 100vh;"></canvas> <!-- 修改为自适应视口 -->
-    <audio id="backgroundMusic" src="./audio/lift off.mp3" autoplay loop></audio> <!-- 添加背景音乐 -->
+    <canvas id="renderCanvas" style="width: 100vw; height: 100vh;"></canvas>
+    <audio id="backgroundMusic" src="./audio/lift off.mp3" autoplay loop></audio> <!-- 修改背景音乐 -->
+    <div id="loudnessDisplay" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 16px; font-family: Arial, sans-serif; z-index: 1;">
+        Loudness: 0
+    </div> <!-- 左上角显示平均响度 -->
     <script>
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true);
@@ -17,19 +29,28 @@
         const createScene = () => {
             const scene = new BABYLON.Scene(engine);
 
+            // 删除基础灯光
             // 设置背景颜色为纯黑
             scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
 
             // 添加相机
-            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, 2, BABYLON.Vector3.Zero(), scene);
+            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, -2, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
-
-            // 添加光源
-            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
 
             // 加载 .glb 模型
             BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
                 console.log("模型加载完成！");
+
+                scene.meshes.forEach(mesh => {
+                    // 设置材质为白色半透明发光半金属材质
+                    const material = new BABYLON.PBRMaterial("pbr", scene);
+                    material.albedoColor = new BABYLON.Color3(1, 1, 1); // 白色
+                    material.alpha = 0.5; // 半透明
+                    material.metallic = 0.5; // 半金属
+                    material.roughness = 0.2; // 光滑
+                    material.emissiveColor = new BABYLON.Color3(1, 1, 1); // 发光
+                    mesh.material = material;
+                });
             });
 
             return scene;
@@ -41,7 +62,31 @@
         const backgroundMusic = document.getElementById("backgroundMusic");
         backgroundMusic.volume = 0.5;
 
+        // 创建音频上下文和分析器
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioSource = audioContext.createMediaElementSource(backgroundMusic);
+        const analyser = audioContext.createAnalyser();
+        audioSource.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 256;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const loudnessDisplay = document.getElementById("loudnessDisplay");
+
         engine.runRenderLoop(() => {
+            // 获取音频数据并计算平均响度
+            analyser.getByteFrequencyData(dataArray);
+            const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+
+            // 更新左上角的响度显示
+            loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
+
+            // 根据响度动态调整模型的整体缩放
+            scene.meshes.forEach(mesh => {
+                const scaleFactor = 1 + averageLoudness / 256; // 响度归一化并绑定到缩放
+                mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
+            });
+
             scene.render();
         });
 
