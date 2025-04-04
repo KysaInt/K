@@ -42,32 +42,28 @@
             z-index: 100;
             pointer-events: none;
         }
+
+        #loudnessDisplay {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 18px;
+            font-family: "Arial", sans-serif;
+            color: white;
+            z-index: 100;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div id="fixedText">AYE-2025/04</div>
-    <!-- 中央显示的静态文本 -->
-    <div id="touchToPlay" style="
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 64px; /* 字体放大一倍 */
-        font-family: 'Arial', sans-serif;
-        font-weight: 100; /* 改用细等线体 */
-        color: white;
-        text-align: center;
-        z-index: 200;
-    ">
-        Touch to Play
-    </div>
-    <!-- 用于渲染的 Canvas 元素 -->
+    <div id="loudnessDisplay">Loudness: 0</div>
     <canvas id="renderCanvas" touch-action="none" style="width: 100%; height: 100%;"></canvas>
 
     <!-- 添加背景音乐 -->
     <audio id="backgroundMusic" preload="auto" loop>
-        <source src="./audio/bg.ogg" type="audio/ogg"> <!-- 默认使用 ogg 格式 -->
-        <source src="./audio/bg.mp3" type="audio/mpeg"> <!-- 备用 mp3 格式 -->
+        <source src="./audio/bg.ogg" type="audio/ogg"> <!-- 修正路径 -->
+        <source src="./audio/bg.mp3" type="audio/mpeg"> <!-- 修正路径 -->
         您的浏览器不支持音频播放。
     </audio>
 
@@ -75,24 +71,12 @@
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
-    <!-- 背景音乐逻辑和 Babylon.js 脚本 -->
+    <!-- Babylon.js 脚本 -->
     <script>
-        // 背景音乐逻辑
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
         const backgroundMusic = document.getElementById("backgroundMusic");
-        const touchToPlay = document.getElementById("touchToPlay");
-
-        const enableAudio = () => {
-            backgroundMusic.volume = 0.5; // 设置音量为 50%
-            backgroundMusic.play().catch(error => {
-                console.error("背景音乐播放失败:", error);
-            });
-
-            // 隐藏静态文本
-            touchToPlay.style.display = "none";
-        };
-
-        // 添加点击事件监听
-        document.body.addEventListener("click", enableAudio, { once: true });
+        const loudnessDisplay = document.getElementById("loudnessDisplay");
 
         // 创建音频上下文和分析器
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -104,10 +88,6 @@
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        // Babylon.js 逻辑
-        const canvas = document.getElementById("renderCanvas");
-        const engine = new BABYLON.Engine(canvas, true);
-
         const createScene = () => {
             const scene = new BABYLON.Scene(engine);
 
@@ -118,45 +98,49 @@
             const glowLayer = new BABYLON.GlowLayer("glow", scene);
             glowLayer.intensity = 0.7; // 将辉光强度上限降低至 0.7
 
-            // 添加相机
-            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, 10, BABYLON.Vector3.Zero(), scene);
+            // 添加相机并顺时针旋转 180°
+            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, 8, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
-
-            // 添加动画残影效果
-            const postProcess = new BABYLON.DefaultRenderingPipeline(
-                "defaultPipeline",
-                true,
-                scene,
-                [camera]
-            );
-            postProcess.motionBlurEnabled = true; // 启用运动模糊
-            postProcess.motionBlurSamples = 16; // 设置模糊采样数
-            postProcess.motionBlurStrength = 0.5; // 设置模糊强度
-
-            // 添加光源
-            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(3, .5, 0), scene);
-            const light2 = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(-3, .5, 0), scene);
-            const light3 = new BABYLON.HemisphericLight("light3", new BABYLON.Vector3(0, -1, 0), scene);
-            light3.diffuse = new BABYLON.Color3(1, 0.5, 0.5); // 粉红色
 
             // 加载 3D 模型
             BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
                 console.log("模型加载完成！");
 
-                scene.meshes.forEach((mesh) => {
+                scene.meshes.forEach((mesh) => {`
                     if (mesh.material) {
-                        const randomColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+                        // 初始材质为白色
                         const pbrMaterial = new BABYLON.PBRMaterial("pbr", scene);
-                        pbrMaterial.albedoColor = randomColor;
-                        pbrMaterial.emissiveColor = randomColor; // 初始发光颜色
+                        pbrMaterial.albedoColor = new BABYLON.Color3(1, 1, 1); // 白色
+                        pbrMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1); // 白色
                         mesh.material = pbrMaterial;
 
                         // 将物体添加到辉光层
                         glowLayer.addIncludedOnlyMesh(mesh);
-                    }
 
-                    // 默认旋转 180 度
-                    mesh.rotation.y += Math.PI;
+                        // 默认旋转 180 度
+                        mesh.rotation.y += Math.PI;
+
+                        // 添加循环彩色变化动画
+                        const colorAnimation = new BABYLON.Animation(
+                            "colorAnimation",
+                            "material.albedoColor",
+                            30,
+                            BABYLON.Animation.ANIMATIONTYPE_COLOR3,
+                            BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                        );
+
+                        const colorKeys = [
+                            { frame: 0, value: new BABYLON.Color3(1, 1, 1) }, // 初始白色
+                            { frame: 75, value: new BABYLON.Color3(Math.random(), Math.random(), Math.random()) }, // 随机彩色
+                            { frame: 150, value: new BABYLON.Color3(Math.random(), Math.random(), Math.random()) }, // 随机彩色
+                            { frame: 225, value: new BABYLON.Color3(Math.random(), Math.random(), Math.random()) }, // 随机彩色
+                            { frame: 300, value: new BABYLON.Color3(1, 1, 1) } // 结束白色
+                        ];
+
+                        colorAnimation.setKeys(colorKeys);
+                        mesh.animations.push(colorAnimation);
+                        scene.beginAnimation(mesh, 0, 300, true);
+                    }
                 });
             });
 
@@ -165,9 +149,20 @@
 
         const scene = createScene();
 
-        const startAnimations = () => {
+        const startAudioAndAnimations = () => {
+            // 播放背景音乐
+            if (backgroundMusic.paused) {
+                backgroundMusic.volume = 0.5;
+                backgroundMusic.play().then(() => {
+                    console.log("背景音乐播放成功");
+                }).catch(error => {
+                    console.error("背景音乐播放失败:", error);
+                    alert("无法播放背景音乐，请检查音频文件路径或浏览器设置。");
+                });
+            }
+
+            // 启动动画并缓慢变为彩色
             scene.meshes.forEach(mesh => {
-                // 添加上下浮动动画
                 const floatAnimation = new BABYLON.Animation(
                     "floatAnimation",
                     "position.y",
@@ -177,13 +172,12 @@
                 );
                 const floatKeys = [
                     { frame: 0, value: mesh.position.y },
-                    { frame: 30, value: mesh.position.y + 0.5 },
-                    { frame: 60, value: mesh.position.y }
+                    { frame: 150, value: mesh.position.y + 0.5 },
+                    { frame: 300, value: mesh.position.y }
                 ];
                 floatAnimation.setKeys(floatKeys);
                 mesh.animations.push(floatAnimation);
 
-                // 添加自旋转动画
                 const rotateAnimation = new BABYLON.Animation(
                     "rotateAnimation",
                     "rotation.y",
@@ -193,46 +187,74 @@
                 );
                 const rotateKeys = [
                     { frame: 0, value: mesh.rotation.y },
-                    { frame: 60, value: mesh.rotation.y + Math.PI * 2 }
+                    { frame: 300, value: mesh.rotation.y + Math.PI * 2 }
                 ];
                 rotateAnimation.setKeys(rotateKeys);
                 mesh.animations.push(rotateAnimation);
 
-                // 添加无序三轴旋转动画
                 const randomRotationAnimation = new BABYLON.Animation(
                     "randomRotationAnimation",
                     "rotation",
-                    6,
+                    30,
                     BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
                     BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
                 );
+
+                const easingFunction = new BABYLON.SineEase();
+                easingFunction.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
+
                 const randomRotationKeys = [
                     { frame: 0, value: mesh.rotation.clone() },
-                    { frame: 20, value: new BABYLON.Vector3(mesh.rotation.x + Math.random() * Math.PI, mesh.rotation.y + Math.random() * Math.PI, mesh.rotation.z + Math.random() * Math.PI) },
-                    { frame: 40, value: new BABYLON.Vector3(mesh.rotation.x + Math.random() * Math.PI, mesh.rotation.y + Math.random() * Math.PI, mesh.rotation.z + Math.random() * Math.PI) },
-                    { frame: 60, value: mesh.rotation.clone() }
+                    { frame: 60, value: new BABYLON.Vector3(
+                        mesh.rotation.x + Math.random() * Math.PI,
+                        mesh.rotation.y + Math.random() * Math.PI,
+                        mesh.rotation.z + Math.random() * Math.PI
+                    ) },
+                    { frame: 120, value: new BABYLON.Vector3(
+                        mesh.rotation.x + Math.random() * Math.PI,
+                        mesh.rotation.y + Math.random() * Math.PI,
+                        mesh.rotation.z + Math.random() * Math.PI
+                    ) },
+                    { frame: 180, value: new BABYLON.Vector3(
+                        mesh.rotation.x + Math.random() * Math.PI,
+                        mesh.rotation.y + Math.random() * Math.PI,
+                        mesh.rotation.z + Math.random() * Math.PI
+                    ) },
+                    { frame: 240, value: new BABYLON.Vector3(
+                        mesh.rotation.x + Math.random() * Math.PI,
+                        mesh.rotation.y + Math.random() * Math.PI,
+                        mesh.rotation.z + Math.random() * Math.PI
+                    ) },
+                    { frame: 300, value: mesh.rotation.clone() }
                 ];
+
                 randomRotationAnimation.setKeys(randomRotationKeys);
+                randomRotationAnimation.setEasingFunction(easingFunction);
                 mesh.animations.push(randomRotationAnimation);
 
-                // 确保动画被正确启动
-                scene.beginAnimation(mesh, 0, 60, true, 0.6);
+                scene.beginAnimation(mesh, 0, 300, true, 0.6);
             });
         };
 
-        document.body.addEventListener("click", startAnimations, { once: true });
+        // 确保用户交互触发背景音乐播放
+        document.body.addEventListener("click", startAudioAndAnimations, { once: true });
 
         engine.runRenderLoop(() => {
             // 响度控制逻辑
             analyser.getByteFrequencyData(dataArray);
             const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
 
+            // 更新屏幕左下角的响度显示
+            loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
+
+            // 根据响度动态调整模型材质的亮度和缩放
             scene.meshes.forEach(mesh => {
                 if (mesh.material && mesh.material.emissiveColor) {
-                    const intensity = averageLoudness / 256;
-                    mesh.material.emissiveColor = mesh.material.albedoColor.scale(intensity);
+                    const intensity = averageLoudness / 256; // 归一化响度值
+                    mesh.material.emissiveColor = mesh.material.albedoColor.scale(intensity); // 调整发光颜色
 
-                    const scaleFactor = (2 + intensity * 2) * -2 * 2 * 0.7; // 缩放范围 [-5.6, -11.2]
+                    // 动态调整缩放，整体缩放范围扩大 3 倍
+                    const scaleFactor = (1 + intensity * 2) * 3; // 缩放范围 [3, 9]
                     mesh.scaling = new BABYLON.Vector3(scaleFactor, scaleFactor, scaleFactor);
                 }
             });
