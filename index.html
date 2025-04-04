@@ -19,9 +19,13 @@
 <body style="background-color: black;"> <!-- 设置初始背景为黑色 -->
     <canvas id="renderCanvas" style="width: 100vw; height: 100vh;"></canvas>
     <audio id="backgroundMusic" src="./audio/bg.mp3" loop></audio> <!-- 修改背景音乐 -->
-    <div id="loudnessDisplay" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 16px; font-family: Arial, sans-serif; z-index: 1;">
-        Loudness: 0
-    </div> <!-- 左上角显示平均响度 -->
+    <div id="progressContainer" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 20px; font-family: 'Arial', sans-serif; z-index: 1; display: flex; align-items: center;">
+        <span>AYE</span>
+        <div id="progressBar" style="width: 4px; height: 20px; background-color: gray; margin: 0 10px; position: relative; overflow: hidden;">
+            <div id="progressFill" style="width: 100%; height: 0%; background-color: white; position: absolute; bottom: 0; transition: height 0.1s;"></div>
+        </div>
+        <span>2025/04</span>
+    </div>
     <script>
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true);
@@ -33,6 +37,10 @@
             // 设置背景颜色为纯黑
             scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
 
+            // 添加辉光效果
+            const glowLayer = new BABYLON.GlowLayer("glow", scene);
+            glowLayer.intensity = .4;
+
             // 添加相机
             const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI, 2, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
@@ -41,20 +49,53 @@
             BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
                 console.log("模型加载完成！");
 
-                const baseEmissiveIntensity = 0.2; // 设置基础发光强度
-
                 const numMeshes = scene.meshes.length; // 获取网格数量
                 const frequencyStep = Math.floor(dataArray.length / numMeshes); // 每个网格对应的频率区间大小
 
                 scene.meshes.forEach((mesh, index) => {
-                    // 设置材质为白色半透明发光半金属材质
-                    const material = new BABYLON.PBRMaterial("pbr", scene);
+                    // 设置初始材质为白色，发光强度为 1
+                    const material = new BABYLON.PBRMaterial(`pbr_${index}`, scene);
                     material.albedoColor = new BABYLON.Color3(1, 1, 1); // 白色
-                    material.alpha = 0.5; // 半透明
-                    material.metallic = 0.5; // 半金属
-                    material.roughness = 0.2; // 光滑
-                    material.emissiveColor = new BABYLON.Color3(1, 1, 1); // 发光
+                    material.emissiveColor = new BABYLON.Color3(1, 1, 1); // 白色发光
+                    material.emissiveIntensity = 1; // 初始发光强度为 1
+                    material.metallic = 0.5;
+                    material.roughness = 0.2;
+
+                    // 添加菲涅尔反射贴图
+                    const fresnelTexture = new BABYLON.FresnelParameters();
+                    fresnelTexture.bias = 0.1;
+                    fresnelTexture.power = 2;
+                    fresnelTexture.leftColor = new BABYLON.Color3(1, 1, 1); // 白色
+                    fresnelTexture.rightColor = new BABYLON.Color3(0, 0, 0); // 黑色
+                    material.reflectionFresnelParameters = fresnelTexture;
+
                     mesh.material = material;
+
+                    // 定义动态随机渐变彩色循环动画
+                    const colorAnimation = new BABYLON.Animation(
+                        `colorAnimation_${index}`,
+                        "material.emissiveColor",
+                        15,
+                        BABYLON.Animation.ANIMATIONTYPE_COLOR3,
+                        BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                    );
+
+                    const randomColor1 = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+                    const randomColor2 = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+                    const randomColor3 = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+
+                    const colorKeyFrames = [
+                        { frame: 0, value: randomColor1 }, // 随机彩色 1
+                        { frame: 100, value: randomColor2 }, // 随机彩色 2
+                        { frame: 200, value: randomColor3 }, // 随机彩色 3
+                        { frame: 300, value: randomColor1 } // 回到随机彩色 1
+                    ];
+
+                    colorAnimation.setKeys(colorKeyFrames);
+                    mesh.animations.push(colorAnimation);
+
+                    // 开始播放材质颜色动画
+                    scene.beginAnimation(mesh, 0, 300, true);
 
                     // 定义 10 组不同的旋转动画关键帧
                     const rotationKeyFramesGroups = Array.from({ length: 10 }, () => [
@@ -124,7 +165,7 @@
                         const start = index * frequencyStep;
                         const end = start + frequencyStep;
                         const averageLoudness = dataArray.slice(start, end).reduce((sum, value) => sum + value, 0) / frequencyStep;
-                        material.emissiveIntensity = (baseEmissiveIntensity + (averageLoudness / 256) * 0.8) * 2; // (基础值 + 响度影响) * 2
+                        material.emissiveIntensity = (averageLoudness / 256) * 2; // 直接绑定到响度影响
                     };
                 });
             });
@@ -146,7 +187,7 @@
         analyser.fftSize = 256;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const loudnessDisplay = document.getElementById("loudnessDisplay");
+        const progressFill = document.getElementById("progressFill");
 
         const startInteraction = () => {
             // 恢复音频上下文
@@ -169,9 +210,10 @@
                     }
                 });
 
-                // 更新左上角的响度显示
+                // 更新进度条高度
                 const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-                loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
+                const progressPercentage = (averageLoudness / 256) * 100;
+                progressFill.style.height = `${progressPercentage}%`;
 
                 // 根据响度动态调整模型的整体缩放
                 scene.meshes.forEach(mesh => {
