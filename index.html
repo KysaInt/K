@@ -18,7 +18,7 @@
 </head>
 <body>
     <canvas id="renderCanvas" style="width: 100vw; height: 100vh;"></canvas>
-    <audio id="backgroundMusic" src="./audio/lift off.mp3" autoplay loop></audio> <!-- 修改背景音乐 -->
+    <audio id="backgroundMusic" src="./audio/bg.mp3" autoplay loop></audio> <!-- 修改背景音乐 -->
     <div id="loudnessDisplay" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 16px; font-family: Arial, sans-serif; z-index: 1;">
         Loudness: 0
     </div> <!-- 左上角显示平均响度 -->
@@ -34,14 +34,19 @@
             scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
 
             // 添加相机
-            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, -Math.PI, -2, BABYLON.Vector3.Zero(), scene);
+            const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI, 2, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
 
             // 加载 .glb 模型
             BABYLON.SceneLoader.Append("models/", "model.glb", scene, function () {
                 console.log("模型加载完成！");
 
-                scene.meshes.forEach(mesh => {
+                const baseEmissiveIntensity = 0.2; // 设置基础发光强度
+
+                const numMeshes = scene.meshes.length; // 获取网格数量
+                const frequencyStep = Math.floor(dataArray.length / numMeshes); // 每个网格对应的频率区间大小
+
+                scene.meshes.forEach((mesh, index) => {
                     // 设置材质为白色半透明发光半金属材质
                     const material = new BABYLON.PBRMaterial("pbr", scene);
                     material.albedoColor = new BABYLON.Color3(1, 1, 1); // 白色
@@ -50,6 +55,77 @@
                     material.roughness = 0.2; // 光滑
                     material.emissiveColor = new BABYLON.Color3(1, 1, 1); // 发光
                     mesh.material = material;
+
+                    // 定义 10 组不同的旋转动画关键帧
+                    const rotationKeyFramesGroups = Array.from({ length: 10 }, () => [
+                        { frame: 0, value: new BABYLON.Vector3(0, 0, 0) },
+                        { frame: 25, value: new BABYLON.Vector3(0, 0, 0) }, // 起点静止时间缩短一半
+                        { frame: 150, value: new BABYLON.Vector3(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI) },
+                        { frame: 275, value: new BABYLON.Vector3(0, 0, 0) }, // 终点静止时间缩短一半
+                        { frame: 300, value: new BABYLON.Vector3(0, 0, 0) }
+                    ]);
+
+                    // 创建旋转动画
+                    const rotationAnimation = new BABYLON.Animation(
+                        `rotationAnimation_${index}`,
+                        "rotation",
+                        15, // 动画速率
+                        BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+                        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT // 不循环，等待重新选择动画
+                    );
+
+                    // 设置缓动函数
+                    const easingFunction = new BABYLON.QuadraticEase(); // 使用二次缓动函数
+                    easingFunction.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
+                    rotationAnimation.setEasingFunction(easingFunction);
+
+                    // 随机播放动画
+                    const playRandomAnimation = () => {
+                        const randomGroup = Math.floor(Math.random() * 10); // 随机选择 0 到 9
+                        rotationAnimation.setKeys(rotationKeyFramesGroups[randomGroup]);
+
+                        mesh.animations = [rotationAnimation];
+                        scene.beginAnimation(mesh, 0, 300, false, 1, () => {
+                            playRandomAnimation(); // 动画播放完毕后重新选择随机动画
+                        });
+                    };
+
+                    playRandomAnimation(); // 开始播放随机动画
+
+                    // 添加随机浮动动画
+                    const floatAnimation = new BABYLON.Animation(
+                        `floatAnimation_${index}`,
+                        "position.y",
+                        15, // 动画速率与旋转动画一致
+                        BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+                        BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+                    );
+
+                    // 设置浮动动画关键帧
+                    const floatKeyFrames = [
+                        { frame: 0, value: mesh.position.y },
+                        { frame: 100, value: mesh.position.y + Math.random() * 0.5 },
+                        { frame: 200, value: mesh.position.y - Math.random() * 0.5 },
+                        { frame: 300, value: mesh.position.y }
+                    ];
+
+                    floatAnimation.setKeys(floatKeyFrames);
+
+                    // 设置缓动函数
+                    const floatEasingFunction = new BABYLON.SineEase();
+                    floatEasingFunction.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
+                    floatAnimation.setEasingFunction(floatEasingFunction);
+
+                    mesh.animations.push(floatAnimation);
+                    scene.beginAnimation(mesh, 0, 300, true);
+
+                    // 绑定频率区间的响度值到发光强度
+                    mesh.updateEmissiveIntensity = () => {
+                        const start = index * frequencyStep;
+                        const end = start + frequencyStep;
+                        const averageLoudness = dataArray.slice(start, end).reduce((sum, value) => sum + value, 0) / frequencyStep;
+                        material.emissiveIntensity = (baseEmissiveIntensity + (averageLoudness / 256) * 0.8) * 2; // (基础值 + 响度影响) * 2
+                    };
                 });
             });
 
@@ -74,11 +150,18 @@
         const loudnessDisplay = document.getElementById("loudnessDisplay");
 
         engine.runRenderLoop(() => {
-            // 获取音频数据并计算平均响度
+            // 获取音频数据
             analyser.getByteFrequencyData(dataArray);
-            const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+
+            // 更新每个网格的发光强度
+            scene.meshes.forEach(mesh => {
+                if (mesh.updateEmissiveIntensity) {
+                    mesh.updateEmissiveIntensity();
+                }
+            });
 
             // 更新左上角的响度显示
+            const averageLoudness = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
             loudnessDisplay.textContent = `Loudness: ${averageLoudness.toFixed(2)}`;
 
             // 根据响度动态调整模型的整体缩放
