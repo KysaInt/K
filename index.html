@@ -48,6 +48,29 @@
             const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI, 1.8, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
 
+            // 禁用滚轮缩放功能
+            camera.inputs.removeByType("ArcRotateCameraMouseWheelInput");
+
+            // 根据视口长宽比调整相机角度
+            const adjustCameraAngle = () => {
+                const aspectRatio = window.innerWidth / window.innerHeight;
+                if (aspectRatio > 1) {
+                    // 宽屏模式
+                    camera.alpha = Math.PI / -2; // 水平方向
+                    camera.beta = Math.PI ;  // 俯视角度
+                } else {
+                    // 竖屏模式
+                    camera.alpha = Math.PI;     // 垂直方向
+                    camera.beta = Math.PI ;  // 垂直俯视
+                }
+            };
+
+            // 初始化相机角度
+            adjustCameraAngle();
+
+            // 监听窗口尺寸变化调整相机角度
+            window.addEventListener("resize", adjustCameraAngle);
+
             // 确保相机的视角适配屏幕比例
             camera.viewport = new BABYLON.Viewport(0, 0, 1, 1);
 
