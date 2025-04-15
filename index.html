@@ -29,6 +29,9 @@
     <div id="touchToPlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 72px; font-family: 'Arial', sans-serif; z-index: 2;">
         Touch&Play
     </div>
+    <button id="muteButton" style="position: absolute; bottom: 20px; right: 20px; z-index: 3; background-color: rgba(0, 0, 0, 0.5); color: white; border: none; border-radius: 50%; padding: 10px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        🔊
+    </button>
     <script>
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true);
@@ -219,6 +222,16 @@
 
         const backgroundMusic = document.getElementById("backgroundMusic");
         backgroundMusic.volume = 0.5;
+
+        // 静音按钮逻辑
+        const muteButton = document.getElementById("muteButton");
+        let isMuted = false;
+
+        muteButton.addEventListener("click", () => {
+            isMuted = !isMuted;
+            backgroundMusic.muted = isMuted;
+            muteButton.textContent = isMuted ? "🔇" : "🔊"; // 使用 Unicode 图标切换
+        });
 
         // 创建音频上下文和分析器
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
