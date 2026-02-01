@@ -197,7 +197,7 @@
                         const start = index * frequencyStep;
                         const end = start + frequencyStep;
                         const averageLoudness = dataArray.slice(start, end).reduce((sum, value) => sum + value, 0) / frequencyStep;
-                        material.emissiveIntensity = (averageLoudness / 256) * 2; // 直接绑定到响度影响
+                        material.emissiveIntensity = (averageLoudness / 256) * 1; // 直接绑定到响度影响
                     };
                 });
             });
